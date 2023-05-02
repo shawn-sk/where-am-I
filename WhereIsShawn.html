@@ -1,0 +1,389 @@
+<html>
+  <!-- https://jsfiddle.net/zscjuebn/5/ -->
+
+  <head>
+    <title>Where Am I?</title>
+    <style>
+      table,
+      th,
+      td {
+        border: 1px solid black;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 5px;
+        text-align: left;
+      }
+
+    </style>
+    <script>
+
+// Get the form element
+var form = document.getElementById("form");
+
+// Add an event listener to handle form submission
+form.addEventListener("submit", function(event) {
+  // Prevent the default form submission behavior
+  event.preventDefault();
+
+  // Get the answer and guesses from the form inputs
+  var answer = form.elements["answer"].value;
+  var guesses = form.elements["guesses"].value;
+
+  // Split the guesses by newline and trim any whitespace
+  var guessArray = guesses.split("\n").map(function(guess) {
+    return guess.trim();
+  });
+
+
+
+
+  // Define a function to get the coordinates from an address using OpenCage Geocoding API
+  function getCoordinates(address, callback) {
+    // Create a new script element
+    var script = document.createElement("script");
+
+    // Set the src attribute to the OpenCage Geocoding API with the address as a parameter
+    script.src = "https://api.opencagedata.com/geocode/v1/json?q=" + address + "&key=6d0e711d72d74daeb2b0bfd2a5cdfdba&callback=handleResponse";
+
+    // Append the script element to the document head
+    document.head.appendChild(script);
+
+    // Define a global function to handle the JSON response from the API
+    window.handleResponse = function(response) {
+      // Check if there is a result in the response
+      if (response.results && response.results.length > 0) {
+        // Get the first result from the response
+        var result = response.results[0];
+
+        // Get the latitude and longitude from the result
+        var lat = result.geometry.lat;
+        var lng = result.geometry.lng;
+
+        // Call the callback function with the latitude and longitude as an argument
+        callback(lat, lng);
+      } else {
+        // If there is no result in the response, alert an error message
+        alert("Error: No coordinates found for the address.");
+      }
+
+      // Remove the script element from the document head
+      document.head.removeChild(script);
+    };
+  }
+
+  // Get the coordinates of the answer using the getCoordinates function
+  getCoordinates(answer, function(lat, lng) {
+    // Create an answer object with name, location and coordinates properties
+    var answerObject = {
+      name: "Answer",
+      location: answer,
+      coordinates: [lat, lng]
+    };
+
+    // Proceed with the rest of the code
+  });
+
+
+
+
+  // Define a function to calculate the great circle distance between two coordinates using Haversine formula
+  function getDistance(lat1, lng1, lat2, lng2) {
+    // Convert degrees to radians
+    function toRadians(degrees) {
+      return degrees * Math.PI / 180;
+    }
+
+    // Calculate the differences between latitudes and longitudes in radians
+    var dLat = toRadians(lat2 - lat1);
+    var dLng = toRadians(lng2 - lng1);
+
+    // Calculate the half-chord length of the angular distance between points
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+
+    // Calculate the angular distance between points in radians
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Assume that the earth radius is 3959 miles
+    var r = 3959;
+
+    // Return the distance in miles
+    return r * c;
+  }
+
+  // Define a function to find the farthest point on earth from a given coordinate using antipodal point formula
+  function getFarthestPoint(lat, lng) {
+    // Calculate the antipodal latitude and longitude in degrees
+    var antiLat = -lat;
+    var antiLng = lng > 0 ? lng - 180 : lng + 180;
+
+    // Return the antipodal coordinate as an array
+    return [antiLat, antiLng];
+  }
+
+  // Define a function to find the closest location to the answer from the guesses
+  function getClosestLocation(answer, guesses, callback) {
+    // Initialize an empty array to store the guess objects
+    var guessObjects = [];
+
+    // Initialize a variable to store the index of the current guess
+    var index = 0;
+
+    // Define a recursive function to process each guess
+    function processGuess() {
+      // Check if the index is within the bounds of the guess array
+      if (index < guesses.length) {
+        // Get the current guess
+        var guess = guesses[index];
+
+        // Split the guess by parenthesis and trim any whitespace
+        var guessSplit = guess.split("(").map(function(part) {
+          return part.trim();
+        });
+
+        // Check if the guess has a name and a location
+        if (guessSplit.length == 2) {
+          // Get the name and location from the guess split
+          var name = guessSplit[0];
+          var location = guessSplit[1].slice(0, -1); // Remove the closing parenthesis
+
+          // Get the coordinates of the location using the getCoordinates function
+          getCoordinates(location, function(lat, lng) {
+            // Create a guess object with name, location, coordinates and distance properties
+            var guessObject = {
+              name: name,
+              location: location,
+              coordinates: [lat, lng],
+              distance: getDistance(answer.coordinates[0], answer.coordinates[1], lat, lng)
+            };
+
+            // Push the guess object to the guess objects array
+            guessObjects.push(guessObject);
+
+            // Increment the index and call the processGuess function again
+            index++;
+            processGuess();
+          });
+        } else {
+          // If the guess does not have a name and a location, alert an error message
+          alert("Invalid guess format: " + guess);
+        }
+      } else {
+        // If the index is out of bounds, sort the guess objects array by distance in ascending order
+        guessObjects.sort(function(a, b) {
+          return a.distance - b.distance;
+        });
+
+        // Call the callback function with the closest location as an argument
+        callback(guessObjects[0]);
+      }
+    }
+
+    // Call the processGuess function for the first time
+    processGuess();
+  }
+
+  // Define a function to generate a table with the results of the game
+  function generateTable(answer, guesses) {
+    // Get the result div element
+    var result = document.getElementById("result");
+
+    // Clear any previous content in the result div
+    result.innerHTML = "";
+
+    // Create a new paragraph element for the answer location and coordinates
+    var answerParagraph = document.createElement("p");
+
+    // Set the innerHTML of the answer paragraph to include a bullseye emoji and bold text
+    answerParagraph.innerHTML = "🎯 <b>" + answer.location + "</b> (" + answer.coordinates[0] + "° N, " + answer.coordinates[1] + "° W)";
+
+    // Append the answer paragraph to the result div
+    result.appendChild(answerParagraph);
+
+    // Create a new table element for the guesses and their details
+    var table = document.createElement("table");
+
+    // Create a new table header row element for the column names
+    var headerRow = document.createElement("tr");
+
+    // Create an array of column names
+    var columnNames = ["Names", "Location", "Coordinates", "Distance"];
+
+    // Loop through each column name
+    for (var i = 0; i < columnNames.length; i++) {
+      // Create a new table header cell element for each column name
+      var headerCell = document.createElement("th");
+
+      // Set the text content of each header cell to each column name
+      headerCell.textContent = columnNames[i];
+
+      // Append each header cell to the header row
+      headerRow.appendChild(headerCell);
+    }
+
+    // Append the header row to the table
+    table.appendChild(headerRow);
+
+    // Loop through each guess object in the guesses array
+    for (var j = 0; j < guesses.length; j++) {
+      // Get the current guess object
+      var guessObject = guesses[j];
+
+      // Create a new table row element for each guess object
+      var row = document.createElement("tr");
+
+      // Create an array of values for each guess object
+      var values = [guessObject.name, guessObject.location, guessObject.coordinates[0] + "° N, " + guessObject.coordinates[1] + "° W", guessObject.distance + " mi"];
+
+      // Loop through each value in the values array
+      for (var k = 0; k < values.length; k++) {
+        // Create a new table cell element for each value
+        var cell = document.createElement("td");
+
+        // Set the text content of each cell to each value
+        cell.textContent = values[k];
+
+        // Append each cell to the row
+        row.appendChild(cell);
+      }
+
+      // Append each row to the table
+      table.appendChild(row);
+    }
+
+    // Append the table to the result div
+    result.appendChild(table);
+
+    // Get the closest location to the answer from the guesses using the getClosestLocation function
+    getClosestLocation(answer, guesses, function(closestLocation) {
+      // Create a new paragraph element for the congratulations message
+      var congratsParagraph = document.createElement("p");
+
+      // Set the innerHTML of the congrats paragraph to include a party popper emoji and bold text
+      congratsParagraph.innerHTML = "🎉 Congratulations to <b>" + closestLocation.name + "</b> for guessing the closest location to " + answer.location + "!";
+
+      // Append the congrats paragraph to the result div
+      result.appendChild(congratsParagraph);
+
+      // Create a new anchor element for the link to more information about the answer location
+      var link = document.createElement("a");
+
+      // Set the href attribute of the link to a Google search query with the answer location as a parameter
+      link.href = "https://www.google.com/search?q=" + answer.location;
+
+      // Set the text content of the link to "For more information about " + answer.location + ", please visit this link."
+      link.textContent = "For more information about " + answer.location + ", please visit this link.";
+
+      // Append the link to the result div
+      result.appendChild(link);
+    });
+  }
+
+  // Get the coordinates of the answer location using the getCoordinates function
+  getCoordinates(answer, function(lat, lng) {
+    // Create an answer object with location and coordinates properties
+    var answerObject = {
+      location: answer,
+      coordinates: [lat, lng]
+    };
+
+    // Initialize an empty array to store the processed guesses
+    var processedGuesses = [];
+
+    // Initialize a variable to store the index of the current guess
+    var index = 0;
+
+    // Define a recursive function to process each guess
+    function processGuess() {
+      // Check if the index is within the bounds of the guess array
+      if (index < guessArray.length) {
+        // Get the current guess
+        var guess = guessArray[index];
+
+        // Check if the guess is empty
+        if (guess == "") {
+          // If the guess is empty, find the farthest point on earth from the answer using the getFarthestPoint function
+          var farthestPoint = getFarthestPoint(lat, lng);
+
+          // Get the coordinates of the farthest point as latitude and longitude in degrees
+          var farthestLat = farthestPoint[0];
+          var farthestLng = farthestPoint[1];
+
+          // Create a new script element
+          var script = document.createElement("script");
+
+          // Set the src attribute to a reverse geocoding API with the farthest point as a parameter
+          script.src = "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + farthestLat + "&longitude=" + farthestLng + "&localityLanguage=en&key=YOUR_API_KEY";
+
+          // Append the script element to the document head
+          document.head.appendChild(script);
+
+          // Define a global function to handle the JSON response from the API
+          window.handleResponse = function(response) {
+            // Check if there is a city and a country in the response
+            if (response.city && response.countryName) {
+              // Get the city and country from the response
+              var city = response.city;
+              var country = response.countryName;
+
+              // Create a processed guess with name, location and coordinates properties
+              var processedGuess = {
+                name: "Unknown",
+                location: city + ", " + country,
+                coordinates: [farthestLat, farthestLng]
+              };
+
+              // Push the processed guess to the processed guesses array
+              processedGuesses.push(processedGuess);
+
+              // Increment the index and call the processGuess function again
+              index++;
+              processGuess();
+            } else {
+              // If there is no city and country in the response, alert an error message
+              alert("Error: No city and country found for the farthest point.");
+            }
+
+            // Remove the script element from the document head
+            document.head.removeChild(script);
+          };
+        } else {
+          // If the guess is not empty, push it to the processed guesses array as it is
+          processedGuesses.push(guess);
+
+          // Increment the index and call the processGuess function again
+          index++;
+          processGuess();
+        }
+      } else {
+        // If the index is out of bounds, generate a table with the results of the game using the generateTable function
+        generateTable(answerObject, processedGuesses);
+      }
+    }
+
+    // Call the processGuess function for the first time
+    processGuess();
+  });
+});
+
+    </script>
+  </head>
+
+  <body>
+    <h1>Where am I?</h1>
+    <p>Enter the answer location and the player guesses below. If a player's guess is empty, then it will be changed to the farthest "city, country" on earth from the answer.</p>
+    <form id="form">
+      <label for="answer">Answer:</label>
+      <input type="text" id="answer" name="answer" placeholder="e.g. Mono Lake in California" required><br>
+      <label for="guesses">Guesses:</label>
+      <textarea id="guesses" name="guesses" rows="5" cols="40" placeholder="e.g. John (Utah)" required></textarea><br>
+      <input type="submit" value="Submit">
+    </form>
+    <div id="result"></div>
+  </body>
+
+</html>
