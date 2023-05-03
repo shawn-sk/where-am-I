@@ -19,27 +19,6 @@
 
     </style>
     <script>
-
-// Get the form element
-var form = document.getElementById("form");
-
-// Add an event listener to handle form submission
-form.addEventListener("submit", function(event) {
-  // Prevent the default form submission behavior
-  event.preventDefault();
-
-  // Get the answer and guesses from the form inputs
-  var answer = form.elements["answer"].value;
-  var guesses = form.elements["guesses"].value;
-
-  // Split the guesses by newline and trim any whitespace
-  var guessArray = guesses.split("\n").map(function(guess) {
-    return guess.trim();
-  });
-
-
-
-
   // Define a function to get the coordinates from an address using OpenCage Geocoding API
   function getCoordinates(address, callback) {
     // Create a new script element
@@ -384,6 +363,28 @@ form.addEventListener("submit", function(event) {
       <input type="submit" id="submit" value="Submit">
     </form>
     <div id="result"></div>
+
+    <script>
+      // Select the form element
+      var form = document.querySelector("#form");
+    
+      // Add an event listener to the form
+      form.addEventListener("submit", function(event) {
+        event.preventDefault(); // Prevent the default form submit behavior
+        var formData = new FormData(event.target); // Get the form data
+        var answer = formData.get("answer"); // Get the answer value
+        var guesses = formData.get("guesses"); // Get the guesses value
+    
+        // Split the guesses by newline and trim any whitespace
+        var guessArray = guesses.split("\n").map(function(guess) {
+          return guess.trim();
+        });
+    
+        // Call the function to check the answer and show the result
+        checkAnswer(answer, guessArray);
+      });
+    </script>
+
   </body>
 
 </html>
